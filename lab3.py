@@ -1,45 +1,30 @@
+from lab2 import full_gcd, inverse, canonical_factorization
+#from lab1 import solovei_shtrassen
 from itertools import *
 import random
 import math
-import sys
-import numpy as np
+from sys import exit
+from numpy import zeros, array, where
 rand = random.SystemRandom()
 import time
-from lab2 import full_gcd, inverse, canonical_factorization
-#from lab1 import solovei_shtrassen
 
-def is_prime(a):
-    if a < 2:
-        return False
-    if a == 2 or a == 3:
-        return True
-    if a % 2 == 0 or a % 3 == 0:
-        return False
-    i = 5
-    while i * i <= a:
-        if a % i == 0 or a % (i + 2) == 0:
-            return False
-        i += 6
-    return True
+def sieve_of_eratosthenes(n):
+    is_prime = [True] * (n + 1)
+    is_prime[0] = is_prime[1] = False
+    p = 2
+    while p * p <= n:
+        if is_prime[p]:
+            for i in range(p * p, n + 1, p):
+                is_prime[i] = False
+        p += 1
+    prime_numbers = [i for i, prime in enumerate(is_prime) if prime]
+    return prime_numbers
 
-def get_primes(n):
+def find_prime_numbers(n):
     c = 3.38
-    primes = []
-    B = int(c * math.exp(1 / 2 * (math.log2(n) * math.log2(math.log2(n))) ** (1 / 2)))
-
-    sieve = [True] * B
-    sieve[0] = sieve[1] = False
-
-    for i in range(2, int(math.sqrt(B)) + 1):
-        if sieve[i]:
-            for j in range(i * i, B, i):
-                sieve[j] = False
-
-    for i in range(2, B):
-        if sieve[i] and is_prime(i):
-            primes.append(i)
-
-    return primes
+    B = int(c * math.exp(1/2 * (math.log2(n) * math.log2(math.log2(n))) ** (1/2)))
+    prime_numbers = sieve_of_eratosthenes(B)
+    return prime_numbers
 
 def decompose(n, prime_numbers):
     factor_counts = canonical_factorization(n)
@@ -51,15 +36,16 @@ def decompose(n, prime_numbers):
             return []
     return decomposition
 
-def smoothness(a, b, n, prime_numbers, k, keys, keys3):
-    if len(decompose((b * pow(a, k, n)) % n, prime_numbers)) > 0:
+def smoothness(a, b, n, prime_numbers, k, keys, keys_thrd):
+    if(len(decompose(b*pow(a, k, n)% n, prime_numbers))>0):
         keys.append(k)
-        keys3.append([b, k])
-        return keys, keys3
+        keys_thrd.append([b,k])
+        return keys,keys_thrd
     else:
-        return keys, keys3
+        return keys, keys_thrd
+          
 
-def system_of_linear_equations(a,b,b1,n,prime_numbers,keys,keys3):
+def sole(a, b, b1, n, prime_numbers, keys, keys_thrd):
     system = []
     lenght = len(keys)
     i = 0
@@ -68,40 +54,35 @@ def system_of_linear_equations(a,b,b1,n,prime_numbers,keys,keys3):
         if(b1 == 1 ):
             power =pow(a,keys[i],n)
             if (power == b):
-                sys.exit(print("random success, answer is: ", keys[i] ))
+                exit(print(f"Відповідь: {keys[i]}"))
         else:
-            power = (b1*pow(a,keys[i],n))%n
+            power = b1*pow(a,keys[i],n)%n
         if (power == b):
-           sys.exit(print("random success, answer is: ", keys[i] ))
+           exit(print(f"Відповідь: {keys[i]}"))
         var = decompose(power,prime_numbers)
         if(len(var)==0):
             keys.pop(i)
-            if(len(keys3)!= 0):
-                keys3.pop(i)
+            if(len(keys_thrd)!= 0):
+                keys_thrd.pop(i)
             i -=1
         else:
             system.append(var)
         i+=1
         
-    return keys, system , keys3
+    return keys, system, keys_thrd    
 
-def edit_matrix(system,prime_numbers):
-    l = len(system)
-    matrix = np.array([np.zeros(len(prime_numbers))]*(l))
+def edit_matrix(system, prime_numbers):
+    matrix = zeros((len(system), max(prime_numbers) + 1), dtype=int)
     for i in range(len(system)):
-        raw = np.zeros(len(prime_numbers))
         for k in system[i]:
-            raw[k]+=1
-        matrix[i] = raw
+            matrix[i, k] += 1
     return matrix
 
-def solve_system(n,keys,system,prime_numbers):
+def solver(n,keys,system,prime_numbers):
     system = edit_matrix(system, prime_numbers)
-    keys = np.array(keys)
-    l = len(system)
-    #print(system, keys)
-    good_vectors = []
-    good_answers = []
+    keys = array(keys)
+    vectors = []
+    answers = []
     for i in range(len(keys)):
         index = 0
         len_vec = len(system[i])
@@ -112,76 +93,63 @@ def solve_system(n,keys,system,prime_numbers):
                 index+=1
                 ind = j
         if (index == 1):
-            if(math.gcd(var,(n-1)) != 1):
+            if(full_gcd(var,(n-1))[0] != 1):
                 continue
             else:
-                keys[i] = (keys[i]*inverse(system[i][ind],(n-1)))%(n-1)
+                keys[i] = keys[i]*inverse(system[i][ind],(n-1))%(n-1)
                 system[i][ind] = 1
-                good_vectors.append(list(system[i]))
-                good_answers.append(keys[i])
-    #after this we have array of ez numbers *x = num*
+                vectors.append(list(system[i]))
+                answers.append(keys[i])
     
     return keys, system
-     
+           
 def linear_equations(a,b,n,prime_numbers):
-    c=int(n/2)
-    keys3= []
+    y=int(n*0.5)
+    keys_thrd= []
     keys = []
     system = []
-    k = random.sample(range(1, n + 1), len(prime_numbers)+c)
-    for i in range(len(prime_numbers)+c):
-        keys, keys3 = smoothness(a,1, n ,prime_numbers, k[i], keys, keys3)
-    keys, system = system_of_linear_equations(a,b,1,n,prime_numbers,keys,keys3)[0],system_of_linear_equations(a,b,1,n,prime_numbers,keys,keys3)[1]
+    k = random.sample(range(1, n + 1), len(prime_numbers) + y)
+    for i in range(len(prime_numbers) + y):
+        keys, keys_thrd = smoothness(a,1, n ,prime_numbers, k[i], keys, keys_thrd)
+    keys, system = sole(a,b,1,n,prime_numbers,keys,keys_thrd)[0],sole(a, b, 1, n, prime_numbers, keys, keys_thrd)[1]
     return keys,system
 
-def unsolved_answers(a,b,n,prime_numbers):
-    keys2 = []
-    keys3 = []
-    system2 = []
+def cant_find(a, b, n, prime_numbers):
+    second_keys = []
+    keys_thrd = []
+    second_system = []
     l = random.sample(range(1, n), int(n/2))
     for i in range(len(prime_numbers)):
-        keys2,keys3 = smoothness(a,b, n ,prime_numbers, l[i], keys2, keys3)
-    #print("keys2", keys2)
-    keys2, system2 = system_of_linear_equations(a,1,b,n,prime_numbers,keys2,keys3)[2],system_of_linear_equations(a,b,b,n,prime_numbers,keys2,keys3)[1]
-    
-    return keys2,system2
+        second_keys,keys_thrd = smoothness(a,b, n ,prime_numbers, l[i], second_keys, keys_thrd)
+    second_keys, second_system = sole(a, 1, b, n, prime_numbers, second_keys, keys_thrd)[2],sole(a, b, b, n, prime_numbers, second_keys, keys_thrd)[1]
+    return second_keys,second_system
 
-def solve_index_calculus(keys,system,keys2,system2):
+def solvelus(keys, system, second_keys, second_system):
     x = 0
-    for i in range(len(keys2)):
-        idx = np.where((system == (system2[i])).all(axis=1))
+    for i in range(len(second_keys)):
+        idx = where((system == (second_system[i])).all(axis=1))
         if(len(idx[0])>0):
             if(len(idx)>1):
                 idx = int(idx[0])
-                x = (keys[idx] - keys2[i][1])%(n-1)
+                x = keys[idx] - second_keys[i][1]%( n-1)
                 return x
             else:
-                x = (keys[idx] - keys2[i][1])%(n-1)
+                x = keys[idx] - second_keys[i][1]%(n-1)
                 return x
-
-def index_calculus(a,b,n):
-    primes= get_primes(n)
-    keys, system = linear_equations(a,b,n,primes)
-    keys, system = solve_system(n,keys,system,primes)
-    keys2, system2 = unsolved_answers(a,b,n,primes)
-    system2 = edit_matrix(system2,primes)
-    x = solve_index_calculus(keys,system,keys2,system2)
+    
+def logarifming(a,b,n):
+    primes = find_prime_numbers(n)
+    keys, system = linear_equations(a, b, n, primes)
+    keys, system = solver(n, keys, system, primes)
+    second_keys, second_system = cant_find(a, b, n, primes)
+    second_system = edit_matrix(second_system, primes)
+    x = solvelus(keys, system, second_keys, second_system)
     return x
-
-
+        
 a = int(input("Введіть a: "))
 b = int(input("Введіть b: "))
 n = int(input("Введіть n: "))
-
-# a = 691
-# b = 4757
-# n = 34583
-#start_time = time.time()
-print("Your answer is : ",index_calculus(a,b,n)[0])
-# end_time = time.time()
-# execution_time = end_time - start_time
-# print("time:", execution_time, "s")
-
-
-
-
+begin = time.time()
+print(f"Відповідь: {logarifming(a,b,n)[0]}")
+after = time.time()
+print(f"Обчислено за : {after - begin}")
